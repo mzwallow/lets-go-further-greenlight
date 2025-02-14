@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -98,7 +99,10 @@ func (m UserModel) Insert(user *User) error {
 	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt, &user.Version)
 	if err != nil {
 		switch {
-		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
+		case strings.Contains(
+			err.Error(),
+			`duplicate key value violates unique constraint "users_email_key"`,
+		):
 			return ErrDuplicateEmail
 		default:
 			return err
@@ -108,9 +112,6 @@ func (m UserModel) Insert(user *User) error {
 	return nil
 }
 
-// Retrieve the User details from the database based on the user's email address.
-// Because we have a UNIQUE constraint on the email column, this SQL query will only
-// return one record (or none at all, in which case we return a ErrRecordNotFound error).
 func (m UserModel) GetByEmail(email string) (*User, error) {
 	query := `
         SELECT id, created_at, name, email, password_hash, activated, version
@@ -143,11 +144,6 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
-// Update the details for a specific user. Notice that we check against the version
-// field to help prevent any race conditions during the request cycle, just like we did
-// when updating a movie. And we also check for a violation of the "users_email_key"
-// constraint when performing the update, just like we did when inserting the user
-// record originally.
 func (m UserModel) Update(user *User) error {
 	query := `
         UPDATE users 
@@ -170,7 +166,10 @@ func (m UserModel) Update(user *User) error {
 	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.Version)
 	if err != nil {
 		switch {
-		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
+		case strings.Contains(
+			err.Error(),
+			`duplicate key value violates unique constraint "users_email_key"`,
+		):
 			return ErrDuplicateEmail
 		case errors.Is(err, sql.ErrNoRows):
 			return ErrEditConflict
